@@ -36,7 +36,7 @@ export class HomeQScraper implements Scraper<HomeQResult> {
             });
         }
         
-        const responses = [getResponse(true), getResponse(false)];
+        const responses = [getResponse(false)];
         const results = await Promise.all(responses);
         
         const final: HomeQResult = {
