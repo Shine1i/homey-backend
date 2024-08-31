@@ -1,68 +1,123 @@
-﻿import {Hono} from "hono";
-import mongoose from "mongoose";
-import {Scrypt} from "lucia";
-import {authValidator} from "../validators";
-import {User} from "../database";
-import {lucia} from "../lucia";
-import type {User as LUser,Session as LSession} from "lucia"
-import {authMiddleware} from "./middleware.ts";
-const app = new Hono<{
-    Variables: {
-        user: LUser | null;
-        session: LSession | null;
-    };
-}>()
+﻿// import { Hono } from 'hono';
+// import mongoose from 'mongoose';
+// import type { User as LUser, Session as LSession } from 'lucia';
+// import { authMiddleware } from './middleware.ts';
+// import Listing from "../database/models/listing.ts";
+//
+// const app = new Hono()
+//
+// mongoose.connect('mongodb+srv://wasimysdev:souJrp4mX9CsTxDF@homey.47bj1.mongodb.net/yourDatabaseName').then(() => {
+//     console.log('Connected to MongoDB');
+// }).catch(err => {
+//     console.error('Error connecting to MongoDB:', err);
+// });
+//
+// //  number of rooms and closest coordinates
+// app.get('/listings', async (c) => {
+//     const { rooms, lon, lat } = c.req.query();
+//
+//     if (!lon || !lat) {
+//         return c.json({ error: 'Missing required query parameters' }, 400);
+//     }
+//
+//     try {
+//         const query: any = {
+//             location: {
+//                 $near: {
+//                     $geometry: {
+//                         type: "Point",
+//                         coordinates: [Number(lon), Number(lat)]
+//                     },
+//                     $maxDistance: 25000
+//                 }
+//             }
+//         };
+//
+//         if (rooms) {
+//             query.rooms = Number(rooms);
+//         }
+//
+//         const listings = await Listing.find(query)
+//           .limit(15)
+//           .exec();
+//
+//         console.log(`Found ${listings.length} listings`);
+//
+//         return c.json(listings);
+//     } catch (err) {
+//         console.error('Error fetching listings:', err);
+//         return c.json({ error: 'Error fetching listings' }, 500);
+//     }
+// });
+// app.get('/', (c) => {
+//     return c.text('Hello');
+// });
+// export { app };
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import mongoose from 'mongoose';
+import Listing from "../database/models/listing.ts";
 
-app.use(authMiddleware);
-app.post(
-    '/register',
-    authValidator, async (c) => {
-        const {username, password} = c.req.valid('json')
+const app = new Hono();
 
-        const existing = await User.findOne({username}).exec();
-        if (existing) {
-            return c.json({message: "User already exists"}, 409);
-        }
-        const id = new mongoose.Types.ObjectId();
-        const hashedPassword = await new Scrypt().hash(password);
-        const user = new User({
-            _id: id,
-            username,
-            hashed_password: hashedPassword,
-        })
-        let saved = await user.save();
-        return c.json(saved,
-            201
-        )
-    });
+// Configure CORS
+app.use('*', cors({
+    origin: '*', // Allows all origins. Adjust this as per your requirements.
+}));
 
-app.post("/login", authValidator, async (c) => {
-    const {username, password} = c.req.valid('json')
-    const user = await User.findOne().where({username}).exec();
+mongoose.connect('')
+  .then(() => {
+      console.log('Connected to MongoDB');
+  })
+  .catch(err => {
+      console.error('Error connecting to MongoDB:', err);
+  });
 
-    if (!user) {
-        return c.json({message: "User not found"}, 404);
-    }
-    console.log(`User: ${user}`);
-    const isValid = await new Scrypt().verify(user.hashed_password, password);
-
-    if (!isValid) {
-        return c.json({message: "Invalid password"}, 401);
-    }
-
-    const session = await lucia.createSession(user._id,{});
-    const cookie = lucia.createSessionCookie(session.id);
-
-    c.header('Set-Cookie', cookie.serialize());
-
-    return c.json({message: "Logged in successfully"});
-
-});
-
-app.get('/user', async (c) => {
-    const user = c.get('user');
+// Number of rooms and closest coordinates
+app.get('/listings', async (c) => {
+    const { rooms, lon, lat, page = '1' } = c.req.query();
     
-    return c.json(user);
+    if (!lon || !lat) {
+        return c.json({ error: 'Missing required query parameters' }, 400);
+    }
+    
+    const pageNumber = Number(page);
+    const limit = 15;
+    const skip = (pageNumber - 1) * limit;
+    
+    try {
+        const query: any = {
+            location: {
+                $near: {
+                    $geometry: {
+                        type: "Point",
+                        coordinates: [Number(lon), Number(lat)]
+                    },
+                    $maxDistance: 25000
+                }
+            }
+        };
+        
+        if (rooms) {
+            query.rooms = Number(rooms);
+        }
+        
+        const listings = await Listing.find(query)
+          .limit(limit)
+          .skip(skip)
+          .exec();
+        
+        console.log(`Found ${listings.length} listings`);
+        
+        return c.json(listings);
+    } catch (err) {
+        console.error('Error fetching listings:', err);
+        return c.json({ error: 'Error fetching listings' }, 500);
+    }
 });
 
-export {app}
+app.get('/', (c) => {
+    return c.text('Hello');
+});
+
+export { app };

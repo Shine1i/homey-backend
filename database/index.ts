@@ -1,71 +1,52 @@
-﻿import * as fs from 'fs';
+﻿import mongoose from 'mongoose';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import Listing from './models/listing'; // Adjust the path as necessary to where your Listing model is located
 
-type Result = {
-    id: number;
-    references: Record<string, any>;
-    type: string;
-    uri: string;
-    municipality: string;
-    county: string;
-    city: string;
-    location: { lat: number; lon: number };
-    images: Array<{ image: string; caption: string; position: number }>;
-    videos: any[];
-    boost_value: number;
-    title: string;
-    audience: string;
-    is_short_lease: boolean;
-    early_access: { start: string; end: string; active: boolean; mode: string };
-    rent: number;
-    rooms: number;
-    area: number;
-    date_access: string;
-    object_ad: Record<string, any>;  // Updated type of object_ad
-};
+// ES Module replacement for __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-type Data = {
-    results: Result[];
-};
+// Read the JSON file
+const filepath = path.join(__dirname, 'output.json');
+const rawData = fs.readFileSync(filepath, 'utf8');
+const jsonData = JSON.parse(rawData);
+const listings = jsonData.results;
 
-// Function to process the array
-function mergeNestedObjectAd(results: Result[]) {
-    return results.map(result => {
-        if (result.object_ad && result.object_ad.object_ad) {
-            // Merge properties
-            result.object_ad = {
-                ...result.object_ad,
-                ...result.object_ad.object_ad
-            };
-            // Remove the nested object_ad
-            delete result.object_ad.object_ad;
-        }
-        return result;
-    });
-}
-
-// Read the JSON data from the file
-fs.readFile('../output.json', 'utf8', (err, data) => {
-    if (err) {
-        console.error('Error reading the file:', err);
-        return;
-    }
-    
+// Function to insert listings into the database
+const insertListings = async () => {
     try {
-        const parsedData: Data = JSON.parse(data);
-        
-        // Process the data
-        const updatedData = mergeNestedObjectAd(parsedData.results);
-        
-        // Write the updated data back to the file
-        fs.writeFile('output.json', JSON.stringify({ results: updatedData }, null, 2), 'utf8', (err) => {
-            if (err) {
-                console.error('Error writing the file:', err);
-                return;
+        // Connect to MongoDB
+        await mongoose.connect('mongodb+srv://wasimysdev:souJrp4mX9CsTxDF@homey.47bj1.mongodb.net/yourDatabaseName');
+
+        // Iterate over each listing in the array and insert it
+        for (const listingData of listings) {
+            // Ensure audience is a string
+            if (Array.isArray(listingData.audience)) {
+                listingData.audience = listingData.audience.join(', '); // Join array elements into a single string
             }
-            console.log('File has been updated.');
-        });
-        
-    } catch (parseError) {
-        console.error('Error parsing JSON:', parseError);
+            if (listingData.location && listingData.location.lat !== undefined && listingData.location.lon !== undefined) {
+                listingData.location = {
+                    type: 'Point',
+                    coordinates: [listingData.location.lon, listingData.location.lat] // [longitude, latitude]
+                };
+            }
+
+            const listing = new Listing(listingData);
+            await listing.save();
+
+        }
+
+        console.log('All listings have been inserted successfully!');
+    } catch (err) {
+        console.error('Error inserting listings:', err);
+    } finally {
+        // Close the MongoDB connection
+        await mongoose.disconnect();
     }
-});
+};
+
+// Call the function to insert listings
+insertListings();
+
