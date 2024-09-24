@@ -59,7 +59,7 @@ import mongoose from 'mongoose';
 import Listing from "../database/models/listing.ts";
 
 const app = new Hono();
-
+//
 // Configure CORS
 app.use('*', cors({
     origin: '*', // Allows all origins. Adjust this as per your requirements.
